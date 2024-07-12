@@ -2,6 +2,7 @@ data-path = hof/data/chemprop_HOFdata.csv
 output-dir = hof/model
 task-type = regression
 split-sizes = [0.8, 0.1, 0.1]
+save-smiles-splits = true
 num-workers = 0
 batch-size = 64
 accelerator = auto

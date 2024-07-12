@@ -1,0 +1,63 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=2:vnode=g1-eno1[0]
+#PBS -l place=vscatter:shared
+#PBS -j oe
+#PBS -N Wag_ato_1000
+#PBS -q gpu
+
+# :ngpus=1
+source ~/.bashrc
+conda activate chemprop-c8
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/sam/VP3/
+cd /home/sam/VP3/
+echo "=========================================================="
+echo "Starting on : $(date)"
+echo "Running on node : $(hostname)"
+echo "Current directory : $(pwd)"
+echo "Current job ID : $PBS_JOBID"
+echo "=========================================================="
+START_TIME=$SECONDS
+for FOLD in {0..9}
+do
+    TEMP=1000
+    SAVE_NAME=Wag_ato_$TEMP'_'fold_$FOLD
+    DATA=kfold/new_19081/$TEMP'K'
+
+    python train.py \
+        --dataset_type regression \
+        --data_path $DATA/train_fold_$FOLD'_'$TEMP.csv \
+        --separate_val_path $DATA/val_fold_$FOLD'_'$TEMP.csv \
+        --separate_test_path $DATA/test_fold_$FOLD'_'new_$TEMP.csv \
+        --save_dir save_models/$SAVE_NAME \
+        --epochs 300 \
+        --init_lr 1e-5 \
+        --max_lr 1e-3 \
+        --final_lr 1e-6 \
+        --no_features_scaling \
+        --fp_method atomic \
+        --aggregation sum \
+        --manual_temp_scaling $TEMP \
+        --batch_size 50 \
+        --earlystop 30 \
+        --metric mae \
+        --hidden_size 200 \
+        --ffn_hidden_size 200 \
+        --temperature_columns 'T' \
+        --num_workers 2 \
+        --equation 'Wagner25' \
+        2>&1 | tee ~/VP3/job/ontime/large3.log
+
+    python predict.py \
+        --checkpoint_dir save_models/$SAVE_NAME \
+        --test_path $DATA/test_fold_$FOLD'_'new_$TEMP.csv \
+        --preds_path download/$SAVE_NAME.csv \
+        --no_features_scaling
+
+done
+
+ELAPSED_TIME=$(($SECONDS - $START_TIME))
+echo '=========================================================='
+echo "$(($ELAPSED_TIME/60)) min $(($ELAPSED_TIME%60)) sec"
+echo "Job Ended at $(date)"
+echo '=========================================================='
+conda deactivate
